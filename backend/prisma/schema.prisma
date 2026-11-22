@@ -1,0 +1,306 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+  moduleFormat    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model activity_events {
+  id            String     @id(map: "activity_events_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id  String     @db.Uuid
+  actor_user_id String     @db.Uuid
+  task_id       String     @db.Uuid
+  task_title    String     @db.VarChar(200)
+  action        String     @db.VarChar(32)
+  from_status   String?    @db.VarChar(20)
+  to_status     String?    @db.VarChar(20)
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  users         users      @relation(fields: [actor_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "activity_events_actor_user_id_fkey")
+  workspaces    workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "activity_events_workspace_id_fkey")
+
+  @@index([workspace_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_activity_events_workspace_time")
+  @@index([workspace_id, task_id, created_at(sort: Desc), id(sort: Desc)], map: "ix_activity_events_workspace_task_time")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model attachments {
+  id                  String        @id(map: "pk_attachments") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id        String        @db.Uuid
+  task_id             String?       @db.Uuid
+  note_node_id        String?       @db.Uuid
+  original_name       String        @db.VarChar(255)
+  mime_type           String        @db.VarChar(255)
+  size_bytes          BigInt
+  storage_key         String        @unique(map: "uq_attachments_storage_key")
+  uploaded_by_user_id String        @db.Uuid
+  created_at          DateTime      @default(now()) @db.Timestamptz(6)
+  canvas_nodes        canvas_nodes? @relation(fields: [workspace_id, note_node_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_attachments_note_node")
+  tasks               tasks?        @relation(fields: [workspace_id, task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_attachments_task")
+  users               users         @relation(fields: [uploaded_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_attachments_uploaded_by_user_id")
+  workspaces          workspaces    @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_attachments_workspace_id")
+
+  @@index([workspace_id, note_node_id], map: "ix_attachments_workspace_note", where: raw("(note_node_id IS NOT NULL)"))
+  @@index([workspace_id, task_id], map: "ix_attachments_workspace_task", where: raw("(task_id IS NOT NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model canvas_associations {
+  id                                                                    String       @id(map: "pk_canvas_associations") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id                                                          String       @db.Uuid
+  node_a_id                                                             String       @db.Uuid
+  node_b_id                                                             String       @db.Uuid
+  created_by_user_id                                                    String       @db.Uuid
+  created_at                                                            DateTime     @default(now()) @db.Timestamptz(6)
+  users                                                                 users        @relation(fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_canvas_associations_created_by_user_id")
+  canvas_nodes_canvas_associations_workspace_id_node_a_idTocanvas_nodes canvas_nodes @relation("canvas_associations_workspace_id_node_a_idTocanvas_nodes", fields: [workspace_id, node_a_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_canvas_associations_node_a")
+  canvas_nodes_canvas_associations_workspace_id_node_b_idTocanvas_nodes canvas_nodes @relation("canvas_associations_workspace_id_node_b_idTocanvas_nodes", fields: [workspace_id, node_b_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_canvas_associations_node_b")
+
+  @@unique([workspace_id, node_a_id, node_b_id], map: "uq_canvas_associations_nodes")
+  @@index([workspace_id, node_b_id], map: "ix_canvas_associations_node_b")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model canvas_nodes {
+  id                                                                           String                @id(map: "pk_canvas_nodes") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id                                                                 String                @db.Uuid
+  node_type                                                                    String                @db.VarChar(8)
+  task_id                                                                      String?               @db.Uuid
+  note_text                                                                    String?
+  note_color                                                                   String?               @db.VarChar(8)
+  position_x                                                                   Decimal               @db.Decimal(12, 2)
+  position_y                                                                   Decimal               @db.Decimal(12, 2)
+  is_hidden                                                                    Boolean               @default(false)
+  deleted_at                                                                   DateTime?             @db.Timestamptz(6)
+  version                                                                      BigInt                @default(1)
+  created_by_user_id                                                           String                @db.Uuid
+  updated_by_user_id                                                           String?               @db.Uuid
+  created_at                                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                                   DateTime              @default(now()) @db.Timestamptz(6)
+  attachments                                                                  attachments[]
+  canvas_associations_canvas_associations_workspace_id_node_a_idTocanvas_nodes canvas_associations[] @relation("canvas_associations_workspace_id_node_a_idTocanvas_nodes")
+  canvas_associations_canvas_associations_workspace_id_node_b_idTocanvas_nodes canvas_associations[] @relation("canvas_associations_workspace_id_node_b_idTocanvas_nodes")
+  users_canvas_nodes_created_by_user_idTousers                                 users                 @relation("canvas_nodes_created_by_user_idTousers", fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_canvas_nodes_created_by_user_id")
+  tasks                                                                        tasks?                @relation(fields: [workspace_id, task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_canvas_nodes_task")
+  users_canvas_nodes_updated_by_user_idTousers                                 users?                @relation("canvas_nodes_updated_by_user_idTousers", fields: [updated_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_canvas_nodes_updated_by_user_id")
+  workspaces                                                                   workspaces            @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_canvas_nodes_workspace_id")
+
+  @@unique([workspace_id, id], map: "uq_canvas_nodes_workspace_id_id")
+  @@unique([workspace_id, task_id], map: "uq_canvas_nodes_workspace_task_id", where: raw("((node_type)::text = 'task'::text)"))
+  @@index([workspace_id, task_id], map: "ix_canvas_nodes_workspace_note_task", where: raw("(((node_type)::text = 'note'::text) AND (task_id IS NOT NULL))"))
+  @@index([workspace_id, node_type, is_hidden], map: "ix_canvas_nodes_workspace_type")
+  @@index([workspace_id, deleted_at(sort: Desc)], map: "ix_canvas_nodes_workspace_deleted_at", where: raw("(deleted_at IS NOT NULL)"))
+}
+
+model task_assignees {
+  workspace_id        String            @db.Uuid
+  task_id             String            @db.Uuid
+  user_id             String            @db.Uuid
+  assigned_by_user_id String            @db.Uuid
+  assigned_at         DateTime          @default(now()) @db.Timestamptz(6)
+  users               users             @relation(fields: [assigned_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_task_assignees_assigned_by_user_id")
+  workspace_members   workspace_members @relation(fields: [workspace_id, user_id], references: [workspace_id, user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_assignees_member")
+  tasks               tasks             @relation(fields: [workspace_id, task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_assignees_task")
+
+  @@id([workspace_id, task_id, user_id], map: "pk_task_assignees")
+  @@index([workspace_id, user_id, task_id], map: "ix_task_assignees_workspace_user_id")
+}
+
+model task_checklist_items {
+  id           String   @id(map: "task_checklist_items_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id String   @db.Uuid
+  task_id      String   @db.Uuid
+  title        String   @db.VarChar(200)
+  is_done      Boolean  @default(false)
+  sort_order   Int      @default(0)
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime @default(now()) @db.Timestamptz(6)
+  tasks        tasks    @relation(fields: [workspace_id, task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_checklist_items_task")
+
+  @@index([workspace_id, task_id, sort_order, created_at, id], map: "ix_task_checklist_items_task_order")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model task_dependencies {
+  workspace_id                                                     String   @db.Uuid
+  prerequisite_task_id                                             String   @db.Uuid
+  dependent_task_id                                                String   @db.Uuid
+  created_by_user_id                                               String   @db.Uuid
+  created_at                                                       DateTime @default(now()) @db.Timestamptz(6)
+  users                                                            users    @relation(fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_task_dependencies_created_by_user_id")
+  tasks_task_dependencies_workspace_id_dependent_task_idTotasks    tasks    @relation("task_dependencies_workspace_id_dependent_task_idTotasks", fields: [workspace_id, dependent_task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_dependencies_dependent")
+  tasks_task_dependencies_workspace_id_prerequisite_task_idTotasks tasks    @relation("task_dependencies_workspace_id_prerequisite_task_idTotasks", fields: [workspace_id, prerequisite_task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_dependencies_prerequisite")
+
+  @@id([workspace_id, prerequisite_task_id, dependent_task_id], map: "pk_task_dependencies")
+  @@index([workspace_id, dependent_task_id], map: "ix_task_dependencies_dependent")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tasks {
+  id                                                                           String                 @id(map: "pk_tasks") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id                                                                 String                 @db.Uuid
+  title                                                                        String                 @db.VarChar(200)
+  description                                                                  String?
+  blocked_reason                                                               String?                @db.VarChar(500)
+  status                                                                       String                 @default("todo") @db.VarChar(20)
+  priority                                                                     String                 @default("normal") @db.VarChar(12)
+  due_at                                                                       DateTime?              @db.Timestamptz(6)
+  sort_order                                                                   BigInt                 @default(0)
+  deleted_at                                                                   DateTime?              @db.Timestamptz(6)
+  version                                                                      BigInt                 @default(1)
+  created_by_user_id                                                           String                 @db.Uuid
+  updated_by_user_id                                                           String?                @db.Uuid
+  created_at                                                                   DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                                                   DateTime               @default(now()) @db.Timestamptz(6)
+  attachments                                                                  attachments[]
+  canvas_nodes                                                                 canvas_nodes[]
+  task_assignees                                                               task_assignees[]
+  task_checklist_items                                                         task_checklist_items[]
+  task_dependencies_task_dependencies_workspace_id_dependent_task_idTotasks    task_dependencies[]    @relation("task_dependencies_workspace_id_dependent_task_idTotasks")
+  task_dependencies_task_dependencies_workspace_id_prerequisite_task_idTotasks task_dependencies[]    @relation("task_dependencies_workspace_id_prerequisite_task_idTotasks")
+  users_tasks_created_by_user_idTousers                                        users                  @relation("tasks_created_by_user_idTousers", fields: [created_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tasks_created_by_user_id")
+  users_tasks_updated_by_user_idTousers                                        users?                 @relation("tasks_updated_by_user_idTousers", fields: [updated_by_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tasks_updated_by_user_id")
+  workspaces                                                                   workspaces             @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tasks_workspace_id")
+  taskComments                                                                 task_comments[]
+
+  @@unique([workspace_id, id], map: "uq_tasks_workspace_id_id")
+  @@index([workspace_id, due_at], map: "ix_tasks_workspace_due_at", where: raw("(((status)::text <> 'done'::text) AND (due_at IS NOT NULL))"))
+  @@index([workspace_id, status, sort_order, id], map: "ix_tasks_workspace_status_sort_order")
+  @@index([workspace_id, deleted_at(sort: Desc)], map: "ix_tasks_workspace_deleted_at", where: raw("(deleted_at IS NOT NULL)"))
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_sessions {
+  id                 String    @id(map: "pk_user_sessions") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id            String    @db.Uuid
+  refresh_token_hash String    @unique(map: "uq_user_sessions_refresh_token_hash") @db.VarChar(128)
+  expires_at         DateTime  @db.Timestamptz(6)
+  revoked_at         DateTime? @db.Timestamptz(6)
+  last_used_at       DateTime? @db.Timestamptz(6)
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_user_sessions_user_id")
+
+  @@index([user_id, expires_at], map: "ix_user_sessions_user_id_expires_at")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  id                                                                 String                  @id(map: "pk_users") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  activity_events                                                    activity_events[]
+  email                                                              String                  @unique(map: "uq_users_email") @db.VarChar(320)
+  password_hash                                                      String
+  display_name                                                       String                  @db.VarChar(120)
+  is_active                                                          Boolean                 @default(true)
+  created_at                                                         DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                                                         DateTime                @default(now()) @db.Timestamptz(6)
+  attachments                                                        attachments[]
+  canvas_associations                                                canvas_associations[]
+  canvas_nodes_canvas_nodes_created_by_user_idTousers                canvas_nodes[]          @relation("canvas_nodes_created_by_user_idTousers")
+  canvas_nodes_canvas_nodes_updated_by_user_idTousers                canvas_nodes[]          @relation("canvas_nodes_updated_by_user_idTousers")
+  task_assignees                                                     task_assignees[]
+  task_dependencies                                                  task_dependencies[]
+  tasks_tasks_created_by_user_idTousers                              tasks[]                 @relation("tasks_created_by_user_idTousers")
+  tasks_tasks_updated_by_user_idTousers                              tasks[]                 @relation("tasks_updated_by_user_idTousers")
+  user_sessions                                                      user_sessions[]
+  workspace_invitations_workspace_invitations_invitee_user_idTousers workspace_invitations[] @relation("workspace_invitations_invitee_user_idTousers")
+  workspace_invitations_workspace_invitations_inviter_user_idTousers workspace_invitations[] @relation("workspace_invitations_inviter_user_idTousers")
+  workspace_members                                                  workspace_members[]
+  taskComments                                                       task_comments[]
+  commentMentions                                                    comment_mentions[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspace_invitations {
+  id                                                 String     @id(map: "pk_workspace_invitations") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id                                       String     @db.Uuid
+  invitee_user_id                                    String     @db.Uuid
+  inviter_user_id                                    String     @db.Uuid
+  role                                               String     @db.VarChar(16)
+  status                                             String     @default("pending") @db.VarChar(16)
+  expires_at                                         DateTime   @db.Timestamptz(6)
+  responded_at                                       DateTime?  @db.Timestamptz(6)
+  created_at                                         DateTime   @default(now()) @db.Timestamptz(6)
+  users_workspace_invitations_invitee_user_idTousers users      @relation("workspace_invitations_invitee_user_idTousers", fields: [invitee_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspace_invitations_invitee_user_id")
+  users_workspace_invitations_inviter_user_idTousers users      @relation("workspace_invitations_inviter_user_idTousers", fields: [inviter_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspace_invitations_inviter_user_id")
+  workspaces                                         workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_workspace_invitations_workspace_id")
+
+  @@unique([workspace_id, invitee_user_id], map: "uq_workspace_invitations_pending", where: raw("((status)::text = 'pending'::text)"))
+  @@index([invitee_user_id, status, expires_at], map: "ix_workspace_invitations_invitee_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspace_members {
+  workspace_id    String             @db.Uuid
+  user_id         String             @db.Uuid
+  role            String             @db.VarChar(16)
+  joined_at       DateTime           @default(now()) @db.Timestamptz(6)
+  task_assignees  task_assignees[]
+  users           users              @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspace_members_user_id")
+  workspaces      workspaces         @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_workspace_members_workspace_id")
+  commentMentions comment_mentions[]
+
+  @@id([workspace_id, user_id], map: "pk_workspace_members")
+  @@index([user_id, workspace_id], map: "ix_workspace_members_user_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspaces {
+  id                    String                  @id(map: "pk_workspaces") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  activity_events       activity_events[]
+  name                  String                  @db.VarChar(120)
+  description           String?
+  canvas_version        BigInt                  @default(1)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  attachments           attachments[]
+  canvas_nodes          canvas_nodes[]
+  tasks                 tasks[]
+  workspace_invitations workspace_invitations[]
+  workspace_members     workspace_members[]
+  taskComments          task_comments[]
+  commentMentions       comment_mentions[]
+}
+
+model task_comments {
+  id                String    @id(map: "pk_task_comments") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id      String    @db.Uuid
+  task_id           String    @db.Uuid
+  author_user_id    String    @db.Uuid
+  parent_comment_id String?   @db.Uuid
+  content           String    @db.Text
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @default(now()) @db.Timestamptz(6)
+  deleted_at        DateTime? @db.Timestamptz(6)
+
+  users            users              @relation(fields: [author_user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_task_comments_author")
+  tasks            tasks              @relation(fields: [workspace_id, task_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_comments_task")
+  workspaces       workspaces         @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_comments_workspace")
+  parent_comment   task_comments?     @relation("CommentReplies", fields: [workspace_id, task_id, parent_comment_id], references: [workspace_id, task_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_task_comments_parent")
+  replies          task_comments[]    @relation("CommentReplies")
+  comment_mentions comment_mentions[]
+
+  @@unique([workspace_id, id], map: "uq_task_comments_workspace_id_id")
+  @@unique([workspace_id, task_id, id], map: "uq_task_comments_workspace_task_id")
+  @@index([workspace_id, task_id, created_at(sort: Asc)], map: "ix_task_comments_task_time", where: raw("(deleted_at IS NULL)"))
+  @@index([parent_comment_id], map: "ix_task_comments_parent", where: raw("((parent_comment_id IS NOT NULL) AND (deleted_at IS NULL))"))
+  @@index([workspace_id, deleted_at(sort: Desc)], map: "ix_task_comments_workspace_deleted", where: raw("(deleted_at IS NOT NULL)"))
+}
+
+model comment_mentions {
+  comment_id        String   @db.Uuid
+  workspace_id      String   @db.Uuid
+  mentioned_user_id String   @db.Uuid
+  is_read           Boolean  @default(false)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  task_comments     task_comments     @relation(fields: [workspace_id, comment_id], references: [workspace_id, id], onDelete: Cascade, onUpdate: NoAction, map: "fk_comment_mentions_task_comment")
+  workspaces        workspaces        @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_comment_mentions_workspace")
+  workspace_members workspace_members @relation(fields: [workspace_id, mentioned_user_id], references: [workspace_id, user_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_comment_mentions_member")
+  users             users             @relation(fields: [mentioned_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_comment_mentions_user")
+
+  @@id([comment_id, mentioned_user_id], map: "pk_comment_mentions")
+  @@index([mentioned_user_id, is_read, created_at(sort: Desc)], map: "ix_comment_mentions_user_unread", where: raw("(NOT is_read)"))
+}

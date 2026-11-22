@@ -1,0 +1,41 @@
+**/node_modules/
+**/dist/
+**/.env
+**/.env.*
+!**/.env.example
+**/*.tsbuildinfo
+**/smoke-*.png
+backend/src/generated/
+
+# Local credentials and private keys
+**/.npmrc
+**/secrets/
+**/.secrets/
+**/credentials.json
+**/service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Local data exports and test artifacts
+*.dump
+*.backup
+**/coverage/
+**/playwright-report/
+**/test-results/
+*.log
+
+# Local agent handoff; not part of the project deliverables
+HANDOFF.local.md
+
+# One-off local migration helper containing machine-specific credentials
+backend/scripts/apply-v007.mjs
+
+# Student reports are kept locally, outside the project source history
+reports/
+
+# Plans, architecture notes and local agent instructions stay on this machine
+**/*.md
